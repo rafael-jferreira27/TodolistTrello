@@ -2,190 +2,201 @@
   <div class="container mt-5">
     <h2 class="text-center mb-4">To do List</h2>
 
-    <!-- Campo de entrada (opcional, só pra digitar antes do modal) -->
-    <div class="mb-4">
-      <div class="row g-2 align-items-center">
-        <div class="col-12 col-md-8">
-          <input
-            v-model="newTask"
-            type="text"
-            class="form-control form-control-lg"
-            placeholder="Descreva a tarefa..."
-          />
+    <!-- Criar tarefa principal -->
+    <form class="mb-4" @submit.prevent="addMainTask">
+      <input
+        v-model="newMainTitle"
+        type="text"
+        class="form-control form-control-lg"
+        placeholder="Adicione uma tarefa e pressione Enter"
+      />
+    </form>
+
+    <!-- ===== Seção de tarefas concluídas (100%) ===== -->
+    <div v-if="completedMainTasks.length" class="mb-4">
+      <div class="card border-success">
+        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+          <span class="fw-bold">
+            <i class="fa-solid fa-flag-checkered me-2"></i>
+            Tarefas concluídas
+          </span>
+          <span class="badge bg-light text-success">{{ completedMainTasks.length }}</span>
         </div>
+        <ul class="list-group list-group-flush">
+          <li v-for="t in completedMainTasks" :key="t.id" class="list-group-item d-flex justify-content-between align-items-center">
+            <span>{{ t.title }}</span>
+            <span class="small text-muted">{{ completedCount(t) }} / {{ t.subtasks.length }} subtarefas</span>
+          </li>
+        </ul>
       </div>
     </div>
 
-    <div class="row">
-      <!-- A Fazer -->
-      <div class="col-12 col-md-4">
-        <div class="card border-primary shadow-sm">
-          <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-            <div>
-              <i class="fa-solid fa-list-check me-2"></i>
-              <span class="fw-bold">A Fazer</span>
+    <!-- Grid de tarefas -->
+    <div v-if="mainTasks.length" class="row g-3 mb-4">
+      <div v-for="task in mainTasks" :key="task.id" class="col-12 col-md-4">
+        <!-- Aplica classe 'completed' quando 100% -->
+        <div class="card border-secondary shadow-sm" :class="{ completed: isCompleted(task) }">
+          <div
+            class="card-header text-white d-flex justify-content-between align-items-center"
+            :class="isCompleted(task) ? 'bg-success' : 'bg-secondary'"
+          >
+            <div class="d-flex align-items-center">
+              <i class="fa-solid fa-layer-group me-2"></i>
+              <span class="fw-bold">{{ task.title }}</span>
             </div>
-            <button
-              class="btn btn-light btn-sm text-primary d-flex align-items-center"
-              @click="prepareModal('todo')"
-              data-bs-toggle="modal"
-              data-bs-target="#taskModal"
-              title="Adicionar tarefa"
-            >
-              <i class="fa-solid fa-plus me-1"></i> Add
-            </button>
+
+            <!-- Lado direito: badge (se concluída) + botão -->
+            <div class="d-flex align-items-center gap-2">
+              <span
+                v-if="isCompleted(task)"
+                class="badge bg-light text-success"
+                title="Esta tarefa está 100% concluída"
+              >
+                Concluída
+              </span>
+
+              <button
+                type="button"
+                class="btn btn-light btn-sm d-flex align-items-center"
+                :class="isCompleted(task) ? 'text-success' : 'text-secondary'"
+                @click.prevent="prepareSubModal(task)"
+                data-bs-toggle="modal"
+                :data-bs-target="`#subtaskModal-${task.id}`"
+                :disabled="isCompleted(task)"
+                :title="isCompleted(task) ? 'Tarefa concluída' : 'Adicionar subtarefa'"
+              >
+                <i class="fa-solid fa-plus me-1"></i> Subtarefa
+              </button>
+            </div>
           </div>
 
-          <Draggable v-model="todo" group="tasks" class="card-body kanban-col" tag="div">
-            <div v-for="item in todo" :key="item.id" class="card card-body mb-3 task-card">
-              <p class="card-text mb-0">{{ item.name }}</p>
+          <div class="card-body">
+            <!-- Barra de progresso -->
+            <div v-if="task.subtasks.length" class="mb-3">
+              <div class="d-flex justify-content-between small mb-1">
+                <span>{{ completedCount(task) }} de {{ task.subtasks.length }} concluídas</span>
+                <span>{{ progressPercent(task) }}%</span>
+              </div>
+              <div class="progress" style="height: 8px;">
+                <div
+                  class="progress-bar bg-success"
+                  role="progressbar"
+                  :style="{ width: progressPercent(task) + '%' }"
+                  :aria-valuenow="progressPercent(task)"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                ></div>
+              </div>
             </div>
-          </Draggable>
-        </div>
-      </div>
 
-      <!-- Em andamento -->
-      <div class="col-12 col-md-4">
-        <div class="card border-warning shadow-sm">
-          <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
-            <div>
-              <i class="fa-solid fa-list-check me-2"></i>
-              <span class="fw-bold">Em andamento</span>
-            </div>
-            <button
-              class="btn btn-light btn-sm text-primary d-flex align-items-center"
-              @click="prepareModal('doing')"
-              data-bs-toggle="modal"
-              data-bs-target="#taskModal"
-              title="Adicionar tarefa"
-            >
-              <i class="fa-solid fa-plus me-1"></i> Add
-            </button>
-          </div>
+            <!-- Lista de subtarefas -->
+            <ul v-if="task.subtasks.length" class="list-group list-group-flush mt-2">
+              <li
+                v-for="st in task.subtasks"
+                :key="st.id"
+                class="list-group-item px-0 d-flex align-items-center"
+                :class="{ 'bg-subtask-done': st.done && isCompleted(task) }"
+              >
+                <input
+                  type="checkbox"
+                  class="form-check-input me-2"
+                  v-model="st.done"
+                />
+                <span :class="{ 'text-decoration-line-through text-muted': st.done }">
+                  {{ st.title }}
+                </span>
+              </li>
+            </ul>
 
-          <Draggable v-model="doing" group="tasks" class="card-body kanban-col" tag="div">
-            <div v-for="item in doing" :key="item.id" class="card card-body mb-3 task-card">
-              <p class="card-text mb-0">{{ item.name }}</p>
-            </div>
-          </Draggable>
-        </div>
-      </div>
-
-      <!-- Concluído -->
-      <div class="col-12 col-md-4">
-        <div class="card border-success shadow-sm">
-          <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-            <div>
-              <i class="fa-solid fa-list-check me-2"></i>
-              <span class="fw-bold">Concluído</span>
-            </div>
-            <button
-              class="btn btn-light btn-sm text-primary d-flex align-items-center"
-              @click="prepareModal('done')"
-              data-bs-toggle="modal"
-              data-bs-target="#taskModal"
-              title="Adicionar tarefa"
-            >
-              <i class="fa-solid fa-plus me-1"></i> Add
-            </button>
-          </div>
-
-          <Draggable v-model="done" group="tasks" class="card-body kanban-col" tag="div">
-            <div v-for="item in done" :key="item.id" class="card card-body mb-3 task-card">
-              <p class="card-text mb-0">{{ item.name }}</p>
-            </div>
-          </Draggable>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal Bootstrap -->
-
-    <div class="modal fade" id="taskModal" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">
-              Adicionar tarefa • {{ headerLabel(modalTarget) }}
-            </h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-          </div>
-
-          <div class="modal-body">
-            <label class="form-label">Título</label>
-            <input
-              v-model="newTask"
-              type="text"
-              class="form-control"
-              placeholder="Ex.: Escreva a subtarefa"
-            />
-          </div>
-
-          <div class="modal-footer">
-            <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-            <button
-              class="btn btn-primary"
-              @click="addTaskTo(modalTarget)"
-              data-bs-dismiss="modal"
-            >
-              Salvar
-            </button>
+            <p v-else class="text-muted mb-0 small">Nenhuma subtarefa ainda.</p>
           </div>
         </div>
+
+        <!-- Modal de subtarefa -->
+        <div class="modal fade" :id="`subtaskModal-${task.id}`" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header" :class="isCompleted(task) ? 'bg-success text-white' : ''">
+                <h5 class="modal-title">
+                  Adicionar subtarefa • {{ task.title }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+              </div>
+              <div class="modal-body">
+                <label class="form-label">Título da subtarefa</label>
+                <input
+                  v-model="newSubtaskTitle"
+                  type="text"
+                  class="form-control"
+                  placeholder="Ex.: Ler 10 páginas"
+                  @keyup.enter="addSubtask(task)"
+                >
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary" @click="addSubtask(task)" data-bs-dismiss="modal">Salvar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Fim Modal -->
       </div>
     </div>
-    <!-- /Modal -->
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { VueDraggableNext as Draggable } from 'vue-draggable-next'
+import { ref, computed } from 'vue'
 
-// colunas reativas
-const todo = ref([])
-const doing = ref([])
-const done  = ref([])
+/* ===== Tarefas principais ===== */
+const mainTasks = ref([])
+const newMainTitle = ref('')
 
-const newTask = ref('')
-const modalTarget = ref('todo') // coluna onde a tarefa será criada
-
-const columns = { todo, doing, done }
-
-// gera IDs únicos
-function nextId() {
-  const all = [...todo.value, ...doing.value, ...done.value]
-  return all.length ? Math.max(...all.map(i => i.id)) + 1 : 1
+function nextMainId() {
+  return mainTasks.value.length ? Math.max(...mainTasks.value.map(t => t.id)) + 1 : 1
+}
+function addMainTask() {
+  const title = newMainTitle.value.trim()
+  if (!title) return
+  mainTasks.value.push({ id: nextMainId(), title, subtasks: [] })
+  newMainTitle.value = ''
 }
 
-// prepara modal com destino certo
-function prepareModal(target) {
-  modalTarget.value = target
-  newTask.value = ''
+/* ===== Subtarefas ===== */
+const newSubtaskTitle = ref('')
+function prepareSubModal() { newSubtaskTitle.value = '' }
+function nextSubId(task) { return task.subtasks.length ? Math.max(...task.subtasks.map(s => s.id)) + 1 : 1 }
+function addSubtask(task) {
+  const title = newSubtaskTitle.value.trim()
+  if (!title) return
+  task.subtasks.push({ id: nextSubId(task), title, done: false })
+  newSubtaskTitle.value = ''
 }
 
-// adiciona tarefa à coluna específica
-function addTaskTo(col) {
-  const name = newTask.value.trim()
-  if (!name) return
-  columns[col].value.push({ id: nextId(), name })
-  newTask.value = ''
+/* ===== Progresso ===== */
+function completedCount(task) { return task.subtasks.filter(st => st.done).length }
+function progressPercent(task) {
+  if (!task.subtasks.length) return 0
+  return Math.round((completedCount(task) / task.subtasks.length) * 100)
 }
+function isCompleted(task) { return progressPercent(task) === 100 }
 
-// traduz cabeçalho
-function headerLabel(s) {
-  return s === 'todo' ? 'A Fazer' : s === 'doing' ? 'Em andamento' : 'Concluído'
-}
+/* Lista de tarefas principais concluídas (para a seção dedicada) */
+const completedMainTasks = computed(() => mainTasks.value.filter(t => isCompleted(t)))
 </script>
 
 <style>
 .container { max-width: 1100px; }
 
-.task-card {
-  border: 1px solid #eef0f3 !important;
-  border-radius: 10px;
-  background: #fff !important;
-  cursor: grab;
-}
-.task-card:active { cursor: grabbing; }
+/* Card “verdinho” quando concluído */
+.card.completed .card-header { background-color: #198754 !important; } /* Bootstrap success */
+.card.completed .card-body   { background-color: #eaf7ee; }            /* verde bem claro */
+
+/* Linha das subtarefas concluídas quando o card está 100% (sutil) */
+.bg-subtask-done { background-color: #f2fbf5; }
+
+/* Progress bar com transição suave */
+.progress { background-color: #e9ecef; }
+.progress-bar { transition: width 0.3s ease; }
+.text-decoration-line-through { transition: color 0.3s ease; }
 </style>
